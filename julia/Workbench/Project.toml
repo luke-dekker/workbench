@@ -1,0 +1,11 @@
+name = "Workbench"
+uuid = "7f3c2a1e-5b8d-4e2f-9c6a-0d1e2f3a4b5c"
+version = "0.1.0"
+authors = ["luke-dekker"]
+
+[deps]
+Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+
+[compat]
+julia = "1.10"

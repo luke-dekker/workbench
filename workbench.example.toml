@@ -1,0 +1,102 @@
+# workbench registry. Paths use forward slashes. {root} expands to the project root.
+# A project lists the tools that make sense for it; `wb open <project> <tool>` launches one.
+
+[apps]
+godot   = "C:/tools/Godot/Godot_v4.7.1-stable_win64.exe"
+unity_hub = "C:/Program Files/Unity Hub/Unity Hub.exe"
+unity_editors = "C:/Program Files/Unity/Hub/Editor"       # {version}/Editor/Unity.exe
+blender = "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"
+octave  = "auto"                                          # resolved by wb doctor
+julia_env = "@notebooks"                                   # shared Pluto/IJulia env
+
+[defaults]
+marimo_extras = ["marimo-studio", "marimo-lens"]
+notebooks_dir = "C:/dev/workbench/notebooks"
+
+# ---------------------------------------------------------------- projects
+[projects.workbench]            # also the scratch home: notebooks/ holds marimo, julia, octave scratch files
+root = "C:/dev/workbench"
+kind = "python"
+tags = ["meta", "scratch"]
+tools = ["code", "term", "pluto", "octave", "jupyter"]
+[projects.workbench.artifacts]
+interop_tensors = { glob = "{root}/notebooks/interop/data/*.safetensors", kind = "safetensors" }
+interop_tables  = { glob = "{root}/notebooks/interop/data/*.parquet", kind = "parquet" }
+
+[projects.node-tool]
+root = "C:/dev/node-tool"
+kind = "python"
+tags = ["ml"]
+tools = ["web", "code", "term", "marimo", "jupyter", "godot"]
+godot_dir = "{root}/godot"
+[projects.node-tool.commands]
+web = "uv run python launch_web.py"
+[projects.node-tool.artifacts]
+models    = { glob = "{root}/*.pt", kind = "torch" }
+exports   = { glob = "{root}/**/*.safetensors", kind = "safetensors" }
+subgraphs = { glob = "{root}/subgraphs/*.json", kind = "json" }
+
+[projects.sceneforge]
+root = "C:/dev/sceneforge"
+kind = "python"
+tags = ["scan", "godot"]
+tools = ["code", "term", "godot", "godot_run", "blender", "marimo"]
+godot_dir = "{root}/godot"
+[projects.sceneforge.artifacts]
+runs = { glob = "{root}/runs/*", kind = "dir", dirs = true }
+
+[projects.fieldrec]
+root = "C:/dev/fieldrec"
+kind = "python"
+tags = ["robot", "field"]
+tools = ["code", "term", "marimo"]
+[projects.fieldrec.artifacts]
+sessions = { glob = "C:/data/field/sessions/*/*.mcap", kind = "mcap" }   # merged session files
+nodes    = { glob = "C:/data/field/sessions/*/*/*.mcap", kind = "mcap" } # per-recorder files
+session_dirs = { glob = "C:/data/field/sessions/*", kind = "dir", dirs = true }
+
+[projects.jointbus]
+root = "C:/dev/jointbus"
+kind = "python"
+tags = ["robot"]
+tools = ["code", "term", "marimo"]
+# jointbus has no fixed output dir: paths come from the CLI (jointbus/cli.py record/to-parquet/zero).
+# These follow the README names; nothing exists yet except the calibration TOMLs.
+[projects.jointbus.artifacts]
+streams  = { glob = "{root}/**/*.jsonl", kind = "jsonl" }          # `jointbus record <out>`
+buffers  = { glob = "{root}/**/*.parquet", kind = "parquet" }      # `jointbus to-parquet <out>`
+policies = { glob = "{root}/**/policy_out*", kind = "dir", dirs = true }   # examples/fit_linear_bc.py
+calib    = { glob = "{root}/so_arm_*.toml", kind = "text" }
+
+[projects.struct-sim]
+root = "C:/dev/struct-sim"
+kind = "python"
+tags = ["sim"]
+tools = ["code", "term", "marimo"]
+# struct-sim writes results where `-o` says (structsim/__main__.py); convention is examples/*_results.json
+[projects.struct-sim.artifacts]
+results = { glob = "{root}/**/*_results.json", kind = "json" }
+models  = { glob = "{root}/examples/*.json", kind = "json" }   # overlaps results; model inputs live here too
+
+[projects.wig-ultralight]
+root = "C:/dev/wig-ultralight"
+kind = "python"
+tags = ["aero"]
+tools = ["code", "term", "marimo"]
+# scripts only print; results are redirected stdout (flaperon_results.txt). Keep the *_results.txt convention.
+[projects.wig-ultralight.artifacts]
+results = { glob = "{root}/*_results.txt", kind = "text" }
+
+[projects.unity-app]
+root = "C:/dev/unity-app"
+kind = "unity"
+tags = ["unity"]
+# setup/build/deploy = headless Unity in a terminal tab (docs/FAST_LOOP.md); godot_run = run a scene, no editor
+tools = ["unity", "setup", "build", "deploy", "godot", "godot_run", "unity_hub", "code", "term", "blender"]
+unity_version = "6000.6.4f1"
+godot_dir = "{root}/godot"
+[projects.unity-app.artifacts]
+builds     = { glob = "{root}/Builds/*/*.apk", kind = "file" }
+last_build = { glob = "{root}/Builds/last_build.json", kind = "json" }   # path of the last exe/apk lives here
+unity_log  = { glob = "C:/dev/workbench/logs/unity-unity-app.log", kind = "text" }
+shared     = { glob = "{root}/shared/*.glb", kind = "file" }

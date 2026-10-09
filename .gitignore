@@ -1,0 +1,14 @@
+*.log
+*.pyc
+.venv/
+__pycache__/
+assets/.aumid
+logs/
+notebooks/**/__marimo__/
+notebooks/*.ipynb_checkpoints/
+notebooks/__marimo__/
+notebooks/interop/data/
+
+# personal registry (copy workbench.example.toml and edit)
+workbench.toml
+logs/
