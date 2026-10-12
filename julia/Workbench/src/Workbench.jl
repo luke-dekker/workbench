@@ -10,6 +10,7 @@ The workbench catalog from Julia (Pluto, IJulia, scripts), via PythonCall.
     sess = Workbench.load(a)              # Dict{String, Arrow.Table}  (one per topic)
     t    = Workbench.load(Workbench.latest("node-tool"; kind="safetensors"))   # Dict{String, Array}
     Workbench.snippet(a)                  # Julia code that loads `a`
+    Workbench.save(obj, "fieldrec", "tables"; name="result")   # write into a group -> Python Artifact
 
 Needs the env vars the `wb` launcher sets: JULIA_PYTHONCALL_EXE (the workbench venv python)
 and JULIA_CONDAPKG_BACKEND=Null. Outside the launcher, set them before `using Workbench`.
@@ -98,6 +99,17 @@ function snippet(a::Py)
     return "using Workbench\nobj = Workbench.load(Workbench.find($(repr(name)), $(repr(project))))"
 end
 
-export projects, artifacts, latest, find, load, snippet
+"""
+    save(obj, project, group; name=nothing, overwrite=false)
+
+Write `obj` into a project's artifact group in the group's format (see `wb.catalog.save`) and
+return the Python `Artifact`. `obj` is handed to Python as is: a `Dict` of arrays or vectors for
+parquet / safetensors / npz, a `Dict` or `Vector` for json, a `String` for text. Pass an
+`Arrow.Table` through `Tables.columntable` first.
+"""
+save(obj, project, group; name=nothing, overwrite=false) =
+    catalog().save(obj, project, group, name === nothing ? pybuiltins.None : name; overwrite=overwrite)
+
+export projects, artifacts, latest, find, load, snippet, save
 
 end # module
