@@ -231,6 +231,25 @@ class FakeProc:
     def terminate(self):
         self._terminated = True
 
+    # subprocess.run() drives Popen as a context manager and calls communicate()/wait():
+    # stop_servers() takes that path on Windows (taskkill), so the stub must support it.
+    returncode = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def communicate(self, input=None, timeout=None):
+        return b"", b""
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        self._terminated = True
+
 
 @pytest.fixture
 def no_spawn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[FakeProc]:
