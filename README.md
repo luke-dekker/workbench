@@ -41,6 +41,7 @@ Copy `workbench.example.toml` to `workbench.toml` (gitignored) and edit the path
     uv tool install --editable <clone-dir>      # `wb` on PATH; edits to wb/ are live
     uv sync                                                  # workbench env: core (numpy, pyarrow, safetensors, mcap) + dev group (marimo, studio, lens, jupyterlab, octave-kernel, polars)
     julia --project=@notebooks -e 'using Pkg; Pkg.develop(path="<clone-dir>/julia/Workbench")'   # once; the Julia bridge
+    uv run --group test pytest                               # the test suite (tests/, synthetic registry, no processes spawned)
 
 ## Layers
 
@@ -164,6 +165,7 @@ Play from Bootstrap). Headless runs log to `logs/unity-<project>.log`.
     wb/                 the package (stdlib-only for the window; catalog needs numpy/pyarrow/safetensors/mcap)
     julia/Workbench/    Julia package wrapping the catalog via PythonCall
     snippets/           marimo snippets (registered in ~/.config/marimo/marimo.toml)
+    tests/              pytest suite: synthetic registry in a temp dir, launchers never spawn
     notebooks/          scratch notebooks + the interop proof (see notebooks/README.md)
     assets/             window icon (generated) and the .aumid marker written by `wb shortcut`
     logs/               hidden notebook servers log here (git-ignored)
