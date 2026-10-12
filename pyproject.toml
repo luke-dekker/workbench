@@ -16,6 +16,8 @@ tray = ["pystray>=0.19", "pillow>=10"]
 win = ["pywin32; sys_platform == 'win32'"]
 
 [dependency-groups]
+# the test suite: `uv run --group test pytest`
+test = ["pytest>=8"]
 # the launcher / notebook env (uv sync installs this; --with-editable does not)
 dev = [
     "marimo>=0.25",
@@ -37,3 +39,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["wb"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -122,7 +122,7 @@ class Report:
 def _rel(d: Path, root: Path) -> str:
     try:
         r = d.relative_to(root).as_posix()
-        return "{root}" + ("/" + r if r else "")
+        return "{root}" + ("/" + r if r and r != "." else "")
     except ValueError:
         return d.as_posix()
 
