@@ -12,9 +12,8 @@ from pathlib import Path
 try:
     import pystray
     from PIL import Image, ImageDraw
-except ImportError:  # pragma: no cover
-    print("wb tray needs: uv tool install --editable . --with pystray --with pillow", file=sys.stderr)
-    raise
+except Exception:  # the tray extra is missing, or pystray found no display: the module still loads
+    pystray = Image = ImageDraw = None
 
 from . import launch as L
 from . import registry as R
@@ -22,7 +21,7 @@ from . import registry as R
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
 
-def make_icon(size: int = 64) -> Image.Image:
+def make_icon(size: int = 64) -> "Image.Image":
     """Simple generated glyph: dark rounded square, three colored node dots."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -148,6 +147,9 @@ def _setup(icon: "pystray.Icon") -> None:
 
 
 def main() -> int:
+    if pystray is None:
+        print("wb tray needs: uv tool install --editable . --with pystray --with pillow", file=sys.stderr)
+        return 1
     if not _single_instance():
         _message_box("Workbench is already running. Right-click its icon in the taskbar tray "
                      "(look under the ^ chevron if it is hidden).")

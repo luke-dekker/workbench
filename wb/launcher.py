@@ -15,8 +15,12 @@ from __future__ import annotations
 
 import os
 import sys
-import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+
+try:
+    import tkinter as tk
+    from tkinter import messagebox, simpledialog, ttk
+except ImportError:  # a Python built without Tk (CI, servers): the module loads, the window cannot open
+    tk = messagebox = simpledialog = ttk = None
 
 from . import launch as L
 from . import registry as R
@@ -27,7 +31,7 @@ NEW_KINDS = (("marimo", "New marimo notebook"), ("pluto", "New Pluto notebook"),
 APP_ID = "Workbench.Launcher"
 
 
-class Launcher(tk.Tk):
+class Launcher(tk.Tk if tk else object):
     def __init__(self) -> None:
         super().__init__()
         self.title("Workbench")
@@ -232,6 +236,8 @@ def _reveal(path) -> list[str]:
 
 
 def main() -> int:
+    if tk is None:
+        raise L.LaunchError("the window needs tkinter, which this Python was built without")
     marker = R.registry_path().parent / "assets" / ".aumid"
     if sys.platform == "win32" and marker.exists():
         # `wb shortcut` wrote the same id into the .lnk -> one taskbar button, not two.
