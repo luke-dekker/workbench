@@ -92,6 +92,7 @@ notebook, in a script, and from Pluto through PythonCall:
     sess = catalog.load(a)                           # {topic: pyarrow.Table}
     t = catalog.load(catalog.latest("node-tool", kind="safetensors"))   # {name: ndarray}
     print(catalog.snippet(a))                        # the code that loads a, to paste
+    out = catalog.save(tbl, "fieldrec", "tables")    # write tbl where the group's glob finds it -> Artifact
 
 Artifacts are declared per project in `workbench.toml`:
 
@@ -105,6 +106,14 @@ Loaders by kind: `mcap` (fieldrec JSON-encoded topics -> Arrow tables), `safeten
 `dir` (run / session folder). Add one with `@catalog.loader("kind", snippet_template)`.
 Names that repeat within a project (fieldrec's per-node `gnss` / `can` / `video`) get snippets
 that use the full path via `catalog.load_path(path, kind)`.
+
+Writing back: `catalog.save(obj, project, group, name=None, overwrite=False)` writes `obj` in the
+group's format and returns the `Artifact`. The path is the group's glob with its single `*`
+replaced by `name` (default: a timestamp), so `catalog.latest(project, group=group)` returns it
+next. Writers by kind: `parquet`, `arrow`, `csv` (a pyarrow Table, dict of columns, list of row
+dicts, pandas or polars frame), `safetensors`, `npz` (dict of arrays), `json`, `jsonl`, `text`.
+Globs with a wildcard in a directory segment or `dirs = true` cannot be saved into. Add a writer
+with `@catalog.writer("kind")`; `catalog.save_path(project, group, name)` shows the path first.
 
 Discovery inside marimo: the new-notebook stub ends with a `catalog.show("<project>")` cell, and
 the **snippets panel** (left sidebar) lists `Workbench: ...` snippets from `snippets/`
@@ -122,6 +131,7 @@ catalog through PythonCall. The launcher sets `JULIA_PYTHONCALL_EXE` to the work
     sess = Workbench.load(a)                        # Dict{String, Arrow.Table}, one per topic
     w    = Workbench.load(Workbench.latest("node-tool"; kind="safetensors"))   # Dict{String, Array}
     Workbench.snippet(a)
+    Workbench.save(Dict("w" => rand(Float32, 2, 3)), "node-tool", "weights"; name="trial")
 
 Arrow tables cross over as IPC bytes (no per-element conversion). New Pluto stubs end with a
 `Workbench.show("<project>")` cell, like the marimo ones.

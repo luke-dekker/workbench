@@ -8,6 +8,7 @@ Works the same from marimo, Jupyter, a script, or Julia via PythonCall.
     arts = catalog.artifacts("fieldrec", kind="mcap")
     sess = catalog.load(arts[-1])                   # newest session -> {topic: pyarrow.Table}
     catalog.snippet(arts[-1])                       # the code that does the line above
+    catalog.save(tbl, "fieldrec", "tables")         # write into a group's folder -> Artifact
 
 Artifacts come from [projects.<name>.artifacts] in workbench.toml:
 
@@ -15,9 +16,11 @@ Artifacts come from [projects.<name>.artifacts] in workbench.toml:
     sessions = { glob = "<data-root>/sessions/*/*.mcap", kind = "mcap" }
 
 Loaders are registered per kind in LOADERS; add one with @loader("kind").
+Writers (used by save) are registered per kind in WRITERS; add one with @writer("kind").
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 import glob as _glob
 import json
 from dataclasses import dataclass
@@ -317,4 +320,163 @@ def load_dir(path: Path, **kw: Any) -> Path:
     return Path(path)
 
 
-__all__ = ["Artifact", "projects", "artifacts", "latest", "find", "show", "load", "load_path", "snippet", "loader", "LOADERS"]
+# ---------------------------------------------------------------- writers
+WRITERS: dict[str, Callable[[Any, Path], None]] = {}
+_GLOB_CHARS = "*?["
+
+
+def writer(kind: str):
+    """Register a writer for an artifact kind: fn(obj, path) writes obj to path."""
+    def deco(fn):
+        WRITERS[kind] = fn
+        return fn
+    return deco
+
+
+def save_path(project: str, group: str, name: str | None = None,
+              reg: R.Registry | None = None) -> tuple[Path, str]:
+    """Where `save` would write a new artifact for a group, and the group's kind.
+
+    The path comes from the group's glob: the fixed directory before the first wildcard, and the
+    last segment with its wildcard replaced by `name` (default: a timestamp). Globs with wildcards
+    in more than one segment, or with `dirs = true`, have no single answer and raise ValueError.
+    """
+    reg = reg or R.load()
+    p = reg.project(project)
+    groups = p.extra.get("artifacts") or {}
+    if group not in groups:
+        raise LookupError(f"no artifact group {group!r} in {p.name} (have {', '.join(groups) or 'none'})")
+    spec = groups[group]
+    if spec.get("dirs"):
+        raise ValueError(f"{p.name}/{group} is a directory group; save writes files")
+    kind = spec.get("kind", "file")
+    parts = Path(p.expand(spec["glob"])).parts
+    wild = [i for i, seg in enumerate(parts) if any(c in seg for c in _GLOB_CHARS)]
+    if len(wild) != 1 or wild[0] != len(parts) - 1 or parts[-1].count("*") != 1:
+        raise ValueError(f"cannot choose a path from glob {spec['glob']!r} for {p.name}/{group}: "
+                         "save needs exactly one '*' and only in the file name")
+    directory = Path(*parts[:-1])
+    prefix, suffix = parts[-1].split("*")
+    name = name or datetime.now().strftime("%Y%m%d-%H%M%S")
+    if suffix and name.endswith(suffix):
+        name = name[: -len(suffix)]
+    if not name or any(c in name for c in "/\\"):
+        raise ValueError(f"bad artifact name {name!r}")
+    return directory / f"{prefix}{name}{suffix}", kind
+
+
+def save(obj: Any, project: str, group: str, name: str | None = None, *,
+         overwrite: bool = False, reg: R.Registry | None = None) -> Artifact:
+    """Write `obj` into a project's artifact group in the group's format and return the Artifact.
+
+    `obj` is whatever the kind's writer takes: a pyarrow Table, dict of columns or list of row
+    dicts for parquet / arrow / csv; a dict of arrays for safetensors / npz; any JSON value for
+    json; a list of dicts for jsonl; a str for text. The file lands where the group's glob will
+    find it, so `catalog.latest(project, group=group)` returns it next.
+    """
+    reg = reg or R.load()
+    path, kind = save_path(project, group, name, reg=reg)
+    if kind not in WRITERS:
+        raise LookupError(f"no writer for kind {kind!r}; have {sorted(WRITERS)}")
+    if path.exists() and not overwrite:
+        raise FileExistsError(f"{path} exists; pass overwrite=True to replace it")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    WRITERS[kind](obj, path)
+    return Artifact(reg.project(project).name, group, kind, path)
+
+
+def _as_table(obj: Any):
+    """pyarrow.Table from a Table, a dict of columns, a list of row dicts, or a pandas DataFrame."""
+    import pyarrow as pa
+    if isinstance(obj, pa.Table):
+        return obj
+    if isinstance(obj, Mapping):
+        return pa.table({str(k): (v if isinstance(v, (list, pa.Array, pa.ChunkedArray)) else _as_array(v))
+                         for k, v in obj.items()})
+    if isinstance(obj, list):
+        return pa.Table.from_pylist(obj)
+    if hasattr(obj, "to_arrow"):            # polars
+        return obj.to_arrow()
+    if hasattr(obj, "columns") and hasattr(obj, "index"):   # pandas
+        return pa.Table.from_pandas(obj, preserve_index=False)
+    raise TypeError(f"cannot make a table from {type(obj).__name__}")
+
+
+def _as_array(obj: Any):
+    import numpy as np
+    if hasattr(obj, "to_numpy") and not hasattr(obj, "__array__"):   # juliacall ArrayValue
+        obj = obj.to_numpy()
+    return np.ascontiguousarray(np.asarray(obj))
+
+
+def _as_arrays(obj: Any) -> dict[str, Any]:
+    if not isinstance(obj, Mapping):
+        raise TypeError(f"expected a dict of arrays, got {type(obj).__name__}")
+    return {str(k): _as_array(v) for k, v in obj.items()}
+
+
+@writer("parquet")
+def write_parquet(obj: Any, path: Path) -> None:
+    import pyarrow.parquet as pq
+    pq.write_table(_as_table(obj), str(path))
+
+
+@writer("arrow")
+def write_arrow(obj: Any, path: Path) -> None:
+    import pyarrow.feather as feather
+    feather.write_feather(_as_table(obj), str(path))
+
+
+@writer("csv")
+def write_csv(obj: Any, path: Path) -> None:
+    from pyarrow import csv as pacsv
+    pacsv.write_csv(_as_table(obj), str(path))
+
+
+@writer("safetensors")
+def write_safetensors(obj: Any, path: Path) -> None:
+    from safetensors.numpy import save_file
+    save_file(_as_arrays(obj), str(path))
+
+
+@writer("npz")
+def write_npz(obj: Any, path: Path) -> None:
+    import numpy as np
+    if path.suffix == ".npy":
+        np.save(str(path), _as_array(obj))
+    else:
+        np.savez(str(path), **_as_arrays(obj))
+
+
+@writer("json")
+def write_json(obj: Any, path: Path) -> None:
+    path.write_text(json.dumps(obj, indent=2, default=_json_default), encoding="utf-8")
+
+
+@writer("jsonl")
+def write_jsonl(obj: Any, path: Path) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        for row in obj:
+            f.write(json.dumps(row, default=_json_default) + "\n")
+
+
+@writer("text")
+def write_text(obj: Any, path: Path) -> None:
+    path.write_text(str(obj), encoding="utf-8")
+
+
+def _json_default(o: Any) -> Any:
+    """numpy scalars and arrays, Paths and datetimes as JSON values."""
+    if hasattr(o, "tolist"):
+        return o.tolist()
+    if hasattr(o, "to_numpy"):                 # juliacall ArrayValue
+        return o.to_numpy().tolist()
+    if isinstance(o, Mapping):
+        return dict(o)
+    if isinstance(o, (Path, datetime)):
+        return str(o) if isinstance(o, Path) else o.isoformat()
+    raise TypeError(f"{type(o).__name__} is not JSON serializable")
+
+
+__all__ = ["Artifact", "projects", "artifacts", "latest", "find", "show", "load", "load_path", "snippet",
+           "loader", "LOADERS", "save", "save_path", "writer", "WRITERS"]
