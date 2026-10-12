@@ -220,6 +220,7 @@ class FakeProc:
 
     def __init__(self, argv, **kw):
         self.argv = list(argv)
+        self.args = self.argv  # subprocess.run reads .args for CompletedProcess
         self.kw = kw
         self.pid = 4242
         self._terminated = False
