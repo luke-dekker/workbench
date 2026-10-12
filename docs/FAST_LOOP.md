@@ -57,7 +57,7 @@ Started 2026-10-07. Status legend: `[x]` done and verified, `[~]` written but un
 - [ ] Live tuning channel: tiny WebSocket listener in dev builds of both engines + a marimo snippet that
       pushes parameters / catalog data into the running scene. No rebuild to tweak a value.
 - [ ] Pure C# game logic in a plain .NET class library tested with `dotnet test` outside Unity.
-- [ ] `wb doctor` checks: Android module, adb, Godot export templates, git-lfs.
+- [x] `wb doctor` checks: Android module, adb, Godot export templates, git-lfs.
 
 ### Blockers / decisions
 - Unity 6000.6.4f1 is installed with only WebGL + Windows Standalone modules. **Android Build Support
