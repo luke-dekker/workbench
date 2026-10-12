@@ -108,7 +108,19 @@ parquet / safetensors / npz, a `Dict` or `Vector` for json, a `String` for text.
 `Arrow.Table` through `Tables.columntable` first.
 """
 save(obj, project, group; name=nothing, overwrite=false) =
-    catalog().save(obj, project, group, name === nothing ? pybuiltins.None : name; overwrite=overwrite)
+    catalog().save(_topy(obj), project, group, name === nothing ? pybuiltins.None : name; overwrite=overwrite)
+
+# Julia -> plain Python values. A bare `Py(Dict)` is a juliacall DictValue, which the catalog's
+# writers (and json.dumps) do not take; numeric arrays stay as buffer-protocol wrappers so numpy
+# reads them without a copy.
+_topy(x::AbstractDict) = pydict(pystr(string(k)) => _topy(v) for (k, v) in x)
+_topy(x::NamedTuple) = pydict(pystr(string(k)) => _topy(v) for (k, v) in pairs(x))
+_topy(x::AbstractArray{<:Number}) = Py(x)
+_topy(x::Union{AbstractVector,Tuple}) = pylist(_topy(v) for v in x)
+_topy(x::AbstractString) = pystr(x)
+_topy(x::Nothing) = pybuiltins.None
+_topy(x::Missing) = pybuiltins.None
+_topy(x) = Py(x)
 
 export projects, artifacts, latest, find, load, snippet, save
 

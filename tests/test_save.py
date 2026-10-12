@@ -127,6 +127,18 @@ def test_save_json_with_numpy_values(synthetic_registry):
         C.save({"o": object()}, "alpha", "configs", "bad")
 
 
+def test_save_accepts_any_mapping_and_fortran_arrays(synthetic_registry):
+    """Julia (PythonCall) hands over Mapping wrappers and column-major arrays, not dicts."""
+    from types import MappingProxyType
+    arrays = MappingProxyType({"w": np.asfortranarray(np.arange(6, dtype=np.float32).reshape(2, 3))})
+    got = C.save(arrays, "alpha", "weights", "fortran").load()
+    assert got["w"].shape == (2, 3) and got["w"][1, 2] == 5.0
+    tbl = C.save(MappingProxyType({"x": [1, 2]}), "alpha", "tables", "mapping").load()
+    assert tbl.column("x").to_pylist() == [1, 2]
+    cfg = C.save({"inner": MappingProxyType({"a": 1})}, "alpha", "configs", "nested").load()
+    assert cfg == {"inner": {"a": 1}}
+
+
 def test_save_jsonl_and_text(synthetic_registry):
     a = C.save([{"i": 0}, {"i": 1}], "alpha", "streams", "log")
     assert a.load() == [{"i": 0}, {"i": 1}]

@@ -20,6 +20,7 @@ Writers (used by save) are registered per kind in WRITERS; add one with @writer(
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 import glob as _glob
 import json
 from dataclasses import dataclass
@@ -389,8 +390,8 @@ def _as_table(obj: Any):
     import pyarrow as pa
     if isinstance(obj, pa.Table):
         return obj
-    if isinstance(obj, dict):
-        return pa.table({k: (v if isinstance(v, (list, pa.Array, pa.ChunkedArray)) else _as_array(v))
+    if isinstance(obj, Mapping):
+        return pa.table({str(k): (v if isinstance(v, (list, pa.Array, pa.ChunkedArray)) else _as_array(v))
                          for k, v in obj.items()})
     if isinstance(obj, list):
         return pa.Table.from_pylist(obj)
@@ -403,11 +404,13 @@ def _as_table(obj: Any):
 
 def _as_array(obj: Any):
     import numpy as np
-    return np.asarray(obj)
+    if hasattr(obj, "to_numpy") and not hasattr(obj, "__array__"):   # juliacall ArrayValue
+        obj = obj.to_numpy()
+    return np.ascontiguousarray(np.asarray(obj))
 
 
 def _as_arrays(obj: Any) -> dict[str, Any]:
-    if not isinstance(obj, dict):
+    if not isinstance(obj, Mapping):
         raise TypeError(f"expected a dict of arrays, got {type(obj).__name__}")
     return {str(k): _as_array(v) for k, v in obj.items()}
 
@@ -466,6 +469,10 @@ def _json_default(o: Any) -> Any:
     """numpy scalars and arrays, Paths and datetimes as JSON values."""
     if hasattr(o, "tolist"):
         return o.tolist()
+    if hasattr(o, "to_numpy"):                 # juliacall ArrayValue
+        return o.to_numpy().tolist()
+    if isinstance(o, Mapping):
+        return dict(o)
     if isinstance(o, (Path, datetime)):
         return str(o) if isinstance(o, Path) else o.isoformat()
     raise TypeError(f"{type(o).__name__} is not JSON serializable")
