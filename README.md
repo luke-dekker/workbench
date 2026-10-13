@@ -27,6 +27,7 @@ project's data reachable from any notebook.
     wb open unity-app unity          # Unity editor matching ProjectSettings/ProjectVersion.txt
     wb new unity-app                 # create a missing project root
     wb doctor                       # check every executable the registry points at
+    wb lint [project]               # check the registry: tools, app paths, roots, globs, duplicate artifact names
     wb gui                          # the launcher window (what the taskbar shortcut opens)
     wb shortcut                     # Start-menu shortcut for the window (then right-click > Pin to taskbar)
     wb sleuth <project>             # where does this project write outputs? suggests [artifacts] lines

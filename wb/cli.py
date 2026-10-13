@@ -5,6 +5,7 @@
   wb open <project> <tool> [args] launch a tool on a project
   wb new <project> [--kind K]     create a project root (+ marimo/pluto/julia scaffolding)
   wb doctor                       check every app/executable the registry points at
+  wb lint [project] [--strict]    check the registry: tools, app paths, roots, globs, duplicate names
   wb gui                          the launcher window (what the taskbar button opens)
   wb shortcut [--tray]            Start-menu shortcut for the window (pin it to the taskbar)
   wb sleuth [project] [--apply]   find where a project writes outputs; suggest [artifacts] lines
@@ -14,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -146,6 +148,16 @@ def cmd_doctor(reg: R.Registry, a) -> int:
     check("unity", bool(versions), ", ".join(versions))
     oc = L.find_octave(reg)
     check("octave", bool(oc), oc or "")
+    # FAST_LOOP toolchain: git-lfs, adb (PATH or the newest editor's Android SDK), the Android module,
+    # Godot export templates
+    check("git-lfs", bool(shutil.which("git-lfs")), shutil.which("git-lfs") or "")
+    newest = ed / versions[-1] if versions else None
+    android = newest / "Editor" / "Data" / "PlaybackEngines" / "AndroidPlayer" if newest else None
+    check("android", bool(android and android.exists()), str(android) if android else "(no editor)")
+    adb = shutil.which("adb") or (android and next(android.glob("SDK/platform-tools/adb*"), None))
+    check("adb", bool(adb), str(adb or ""))
+    tpl = godot_export_templates()
+    check("godot_tpl", bool(tpl), ", ".join(t.name for t in tpl))
     # Julia shared env + kernels
     env = reg.apps.get("julia_env", "@notebooks")
     r = subprocess.run(["julia", f"--project={env}", "-e", "import Pluto, IJulia; print(\"pluto+ijulia\")"],
@@ -156,6 +168,29 @@ def cmd_doctor(reg: R.Registry, a) -> int:
         kernels = [ln.split()[0] for ln in r.stdout.splitlines()[1:] if ln.strip()]
         check("kernels", bool(kernels), ", ".join(kernels))
     return 0 if ok else 1
+
+
+def cmd_lint(reg: R.Registry, a) -> int:
+    from . import lint as LINT
+    findings = LINT.lint(reg, a.project)
+    for x in findings:
+        print(x)
+    n = 1 if a.project else len(reg.projects)
+    print(LINT.summary(findings, n))
+    bad = findings if a.strict else LINT.errors(findings)
+    return 1 if bad else 0
+
+
+def godot_export_templates() -> list[Path]:
+    """Installed Godot export template versions (Editor > Manage Export Templates), newest last."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming")) / "Godot"
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library/Application Support/Godot"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "godot"
+    d = base / "export_templates"
+    return sorted(x for x in d.iterdir() if x.is_dir()) if d.is_dir() else []
 
 
 APP_ID = "Workbench.Launcher"
@@ -261,6 +296,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--skip-build", action="store_true", help="deploy: install the last build instead of rebuilding")
     s.set_defaults(fn=cmd_unity)
     sub.add_parser("doctor").set_defaults(fn=cmd_doctor)
+    s = sub.add_parser("lint", help="check the registry: tools, app paths, roots, globs, duplicate names")
+    s.add_argument("project", nargs="?"); s.add_argument("--strict", action="store_true", help="exit 1 on warnings too")
+    s.set_defaults(fn=cmd_lint)
     s = sub.add_parser("shortcut"); s.add_argument("--tray", action="store_true", help="shortcut runs the tray instead of the window")
     s.set_defaults(fn=cmd_shortcut)
     sub.add_parser("tray").set_defaults(fn=cmd_tray)
