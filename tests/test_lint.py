@@ -26,6 +26,8 @@ def test_clean_fixture_has_expected_findings_only(synthetic_registry):
     assert any("artifacts.empty" in m and "matches nothing" in m for m in alpha)
     assert any("'parquet_sample'" in m and "tables, tables_more" in m for m in alpha)
     assert not _msgs(out, project="alpha", level=LINT.ERROR)
+    # the same stem repeated within ONE group (per-session files) is not a clash
+    assert not any("tables, tables," in m or m.endswith("groups tables, tables; pass group= to catalog.artifacts") for m in alpha)
     # beta: `web` is a command, godot_dir is fine
     assert _msgs(out, project="beta") == []
     # ghost: root missing, unity version not installed; its globs are not reported
@@ -135,3 +137,23 @@ def test_cli_lint_clean_project_and_strict(synthetic_registry, capsys):
 def test_cli_lint_unknown_project(synthetic_registry, capsys):
     assert cli.main(["lint", "zzz"]) == 1
     assert "unknown project" in capsys.readouterr().err
+
+
+def test_same_stem_within_one_group_is_not_a_clash(tmp_path):
+    """Per-session files (sessions/*/gnss.mcap) share a stem inside ONE group: no warning.
+    The same stem in TWO groups still warns, naming each group once."""
+    root = tmp_path / "rec"
+    for sess in ("s1", "s2", "s3"):
+        (root / "sessions" / sess).mkdir(parents=True)
+        (root / "sessions" / sess / "gnss.mcap").touch()
+    (root / "extra").mkdir()
+    (root / "extra" / "gnss.mcap").touch()
+    reg = R.Registry(path=tmp_path / "wb.toml", apps={}, defaults={}, projects={})
+    one = R.Project(name="rec", root=root, kind="python",
+                    extra={"artifacts": {"nodes": {"glob": "{root}/sessions/*/gnss.mcap", "kind": "mcap"}}})
+    assert not [x for x in LINT.lint_project(one, reg) if "appears in groups" in x.message]
+    two = R.Project(name="rec", root=root, kind="python",
+                    extra={"artifacts": {"nodes": {"glob": "{root}/sessions/*/gnss.mcap", "kind": "mcap"},
+                                         "extra": {"glob": "{root}/extra/*.mcap", "kind": "mcap"}}})
+    clash = [x.message for x in LINT.lint_project(two, reg) if "appears in groups" in x.message]
+    assert clash == ["artifact name 'gnss' appears in groups extra, nodes; pass group= to catalog.artifacts"]

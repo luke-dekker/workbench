@@ -127,8 +127,9 @@ def lint_project(p: R.Project, reg: R.Registry) -> list[Finding]:
         for h in kept:
             names[h.stem if h.is_file() else h.name].append(g)
     for name, gs in sorted(names.items()):
-        if len(gs) > 1:
-            f(WARN, f"artifact name {name!r} appears in groups {', '.join(sorted(gs))}; pass group= to catalog.artifacts")
+        distinct = sorted(set(gs))
+        if len(distinct) > 1:        # one group matching many files of one stem is normal (per-session nodes)
+            f(WARN, f"artifact name {name!r} appears in groups {', '.join(distinct)}; pass group= to catalog.artifacts")
     return out
 
 
